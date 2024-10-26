@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -14,7 +15,7 @@ class AuthController extends Controller
      */
     public function __construct()
     {
-        $this->middleware('auth:api', ['except' => ['login', 'refresh']]);
+        $this->middleware('auth:api', ['except' => ['login']]);
     }
 
     /**
@@ -30,7 +31,7 @@ class AuthController extends Controller
             return response()->json(['error' => 'Unauthorized'], 401);
         }
         $data = [
-            'sub' => auth('api')->user()->id,
+            'user_id' => auth('api')->user()->id,
             'random' => rand().time(),
             'exp' => time() + config('jwt.refresh_ttl')
         ];
@@ -71,9 +72,17 @@ class AuthController extends Controller
         $refreshToken = request()->get('refresh_token');
         try {
             $decoded = JWTAuth::getJWTProvider()->decode($refreshToken);
-            $user = User::find($decoded['sub']);
+            $user = User::find($decoded['user_id']);
+            if (!$user) {
+                return response()->json(['error' => 'User not found'], 404);
+            }
 
-            return response()->json($decoded);
+            auth('api')->invalidate();
+
+            $token = auth('api')->login($user);
+            $refreshToken = $this->createRefreshToken();
+
+            return $this->respondWithToken($token, $refreshToken);
         } catch (JWTException $e) {
             return response()->json(['error' => 'Refresh Token Invalid'], 500);
         }
@@ -95,5 +104,15 @@ class AuthController extends Controller
             'token_type' => 'bearer',
             'expires_in' => auth('api')->factory()->getTTL() * 60
         ]);
+    }
+
+    protected  function createRefreshToken()
+    {
+        $data = [
+            'user_id' => auth('api')->user()->id,
+            'random' => rand().time(),
+            'exp' => time() + config('jwt.refresh_ttl')
+        ];
+        return JWTAuth::getJWTProvider()->encode($data);
     }
 }

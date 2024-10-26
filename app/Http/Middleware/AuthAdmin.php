@@ -15,7 +15,7 @@ class AuthAdmin
      */
     public function handle(Request $request, Closure $next): Response
     {
-        echo 'Admin request';
+//        echo 'Admin request';
         return $next($request);
     }
 }
